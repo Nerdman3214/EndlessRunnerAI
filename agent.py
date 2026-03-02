@@ -19,10 +19,10 @@ from game import Game
 from model import Linear_QNet, QTrainer
 from helper import plot
 
-# Hyperparameters
+# Hyperparameters - Optimized for 100+ scores
 MAX_MEMORY = 100_000  # Maximum experiences to store
-BATCH_SIZE = 1000        # Number of experiences to sample for training
-LR = 0.001               # Learning rate
+BATCH_SIZE = 2000        # Larger batch = more stable learning
+LR = 0.001               # Learning rate (keep standard)
 
 
 class Agent:
@@ -45,17 +45,20 @@ class Agent:
     def __init__(self):
         self.n_games = 0                        # Number of games played
         self.epsilon = 0                        # Exploration rate (randomness)
-        self.gamma = 0.9                        # Discount factor for future rewards
+        self.gamma = 0.95                       # Higher discount = longer-term planning
+        self.epsilon_min = 0.01                 # Minimum exploration rate
+        self.epsilon_decay = 0.995              # Gradual decay rate
         self.memory = deque(maxlen=MAX_MEMORY)  # Experience replay buffer
         
-        # Neural network: 6 inputs → 256 hidden → 2 outputs
-        self.model = Linear_QNet(6, 256, 2)
+        # Neural network: 6 inputs → 512 hidden → 2 outputs (larger network)
+        self.model = Linear_QNet(6, 512, 2)
         self.trainer = QTrainer(self.model, lr=LR, gamma=self.gamma)
         
         print("Agent initialized!")
-        print(f"State size: 6, Action size: 2")
-        print(f"Hidden layer: 256 neurons")
+        print("State size: 6, Action size: 2")
+        print("Hidden layer: 512 neurons")
         print(f"Memory capacity: {MAX_MEMORY:,} experiences")
+        print(f"Batch size: {BATCH_SIZE:,} | Gamma: {self.gamma}")
 
     def get_state(self, game):
         """
@@ -138,13 +141,13 @@ class Agent:
         Returns:
             int: Action (0 = don't jump, 1 = jump)
         """
-        # Exploration rate decreases as agent gains experience
-        # First 80 games: high exploration
-        # After 80 games: mostly exploitation
-        self.epsilon = 80 - self.n_games
+        # Exploration rate decreases gradually (exponential decay)
+        # Starts at 100% exploration, decays to 1% minimum
+        # This allows continuous learning even atigh game counts
+        epsilon_value = max(self.epsilon_min, 1.0 * (self.epsilon_decay ** self.n_games))
         
         # Random action (exploration)
-        if random.randint(0, 200) < self.epsilon:
+        if random.random() < epsilon_value:
             move = random.randint(0, 1)  # Random: 0 or 1
         else:
             # Use model prediction (exploitation)
@@ -244,11 +247,12 @@ def train():
             plot_mean_scores.append(mean_score)
             
             # Display progress
+            epsilon_display = max(agent.epsilon_min, 1.0 * (agent.epsilon_decay ** agent.n_games))
             print(f'Game: {agent.n_games:4d} | '
                   f'Score: {score:5d} | '
                   f'Best: {best_score:5d} | '
                   f'Mean: {mean_score:6.1f} | '
-                  f'Epsilon: {max(0, agent.epsilon):3d} | '
+                  f'Epsilon: {epsilon_display:.3f} | '
                   f'Memory: {len(agent.memory):6d}')
             
             # Plot progress (updates in real-time)
